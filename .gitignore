@@ -1,0 +1,17 @@
+# Local SDK/tooling
+.dotnet/
+.dotnet-home/
+.dotnet-home-probe/
+.tools/
+.nuget/
+
+# Build outputs
+**/bin/
+**/obj/
+artifacts/
+
+# User and IDE files
+.vs/
+.vscode/
+*.user
+*.suo
