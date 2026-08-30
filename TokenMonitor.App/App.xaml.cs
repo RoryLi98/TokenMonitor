@@ -9,12 +9,19 @@ namespace TokenMonitor.App;
 
 public partial class App : System.Windows.Application
 {
+    private const string SingleInstanceMutexName =
+        @"Local\TokenMonitor.7F4525C0-CA2D-43BD-9FF6-131414F11099";
+    private const string ActivationEventName =
+        @"Local\TokenMonitor.Activate.7F4525C0-CA2D-43BD-9FF6-131414F11099";
+
     private MainWindow? _window;
     private TaskbarBarWindow? _taskbarWindow;
     private MainViewModel? _viewModel;
     private Forms.NotifyIcon? _trayIcon;
     private System.Drawing.Icon? _currentIcon;
     private Mutex? _singleInstanceMutex;
+    private EventWaitHandle? _activationEvent;
+    private RegisteredWaitHandle? _activationRegistration;
     private bool _ownsSingleInstanceMutex;
     private bool _isExiting;
     private AppSettingsStore? _settingsStore;
@@ -26,17 +33,39 @@ public partial class App : System.Windows.Application
     {
         base.OnStartup(e);
 
+        _activationEvent = new EventWaitHandle(
+            initialState: false,
+            mode: EventResetMode.AutoReset,
+            name: ActivationEventName);
         _singleInstanceMutex = new Mutex(
             initiallyOwned: true,
-            name: @"Local\TokenMonitor.7F4525C0-CA2D-43BD-9FF6-131414F11099",
+            name: SingleInstanceMutexName,
             createdNew: out _ownsSingleInstanceMutex);
         if (!_ownsSingleInstanceMutex)
         {
+            _activationEvent.Set();
+            _activationEvent.Dispose();
+            _activationEvent = null;
             _singleInstanceMutex.Dispose();
             _singleInstanceMutex = null;
             Shutdown();
             return;
         }
+
+        _activationRegistration = ThreadPool.RegisterWaitForSingleObject(
+            _activationEvent,
+            (_, timedOut) =>
+            {
+                if (!timedOut && !_isExiting)
+                {
+                    _ = Dispatcher.BeginInvoke(
+                        ActivateExistingInstance,
+                        DispatcherPriority.Normal);
+                }
+            },
+            state: null,
+            Timeout.Infinite,
+            executeOnlyOnce: false);
 
         var providers = new IQuotaProvider[]
         {
@@ -54,11 +83,10 @@ public partial class App : System.Windows.Application
         _window.SetRefreshInterval(TimeSpan.FromSeconds(_settings.RefreshIntervalSeconds));
         _window.TaskbarRecreated += OnTaskbarRecreated;
 
-        CreateTaskbarWindow();
-
         _window.ShowPopup();
         if (_settings.ShowTaskbarBar)
         {
+            CreateTaskbarWindow();
             _taskbarWindow?.Show();
         }
         _ = Dispatcher.InvokeAsync(CreateTrayIcon, DispatcherPriority.ContextIdle);
@@ -66,7 +94,10 @@ public partial class App : System.Windows.Application
 
     private void CreateTaskbarWindow()
     {
-        if (_viewModel is null || _settingsStore is null || _settings is null)
+        if (_taskbarWindow is not null ||
+            _viewModel is null ||
+            _settingsStore is null ||
+            _settings is null)
         {
             return;
         }
@@ -84,6 +115,20 @@ public partial class App : System.Windows.Application
         _taskbarWindow = taskbarWindow;
     }
 
+    private void CloseTaskbarWindow()
+    {
+        var taskbarWindow = _taskbarWindow;
+        _taskbarWindow = null;
+        try
+        {
+            taskbarWindow?.Close();
+        }
+        catch (InvalidOperationException)
+        {
+            // Explorer may already have destroyed the embedded child HWND.
+        }
+    }
+
     private async void OnTaskbarRecreated(object? sender, EventArgs e)
     {
         if (_isExiting)
@@ -92,20 +137,10 @@ public partial class App : System.Windows.Application
         }
 
         await Task.Delay(750);
-        var previousWindow = _taskbarWindow;
-        _taskbarWindow = null;
-        try
-        {
-            previousWindow?.Close();
-        }
-        catch (InvalidOperationException)
-        {
-            // Explorer may already have destroyed the old child HWND.
-        }
-
-        CreateTaskbarWindow();
+        CloseTaskbarWindow();
         if (_settings?.ShowTaskbarBar == true)
         {
+            CreateTaskbarWindow();
             _taskbarWindow?.Show();
         }
 
@@ -144,6 +179,7 @@ public partial class App : System.Windows.Application
         };
         _taskbarMenuItem.Click += (_, _) => Dispatcher.Invoke(
             () => SetTaskbarBarVisible(!(_settings?.ShowTaskbarBar ?? false)));
+        UpdateTaskbarMenuState(_settings?.ShowTaskbarBar ?? false);
         menu.Items.Add(_taskbarMenuItem);
         menu.Items.Add(new Forms.ToolStripSeparator());
         menu.Items.Add("退出", null, (_, _) => Dispatcher.Invoke(ExitApplication));
@@ -237,7 +273,7 @@ public partial class App : System.Windows.Application
 
     private void ShowTaskbarSettings()
     {
-        if (_settings is null || _settingsStore is null || _taskbarWindow is null)
+        if (_settings is null || _settingsStore is null)
         {
             return;
         }
@@ -255,32 +291,88 @@ public partial class App : System.Windows.Application
         }
 
         _settingsStore.Save(_settings);
-        _taskbarWindow.ApplyTaskbarTextSettings();
+        _taskbarWindow?.ApplyTaskbarTextSettings();
     }
 
     private void SetTaskbarBarVisible(bool visible)
     {
-        if (_taskbarWindow is null || _settings is null || _settingsStore is null)
+        if (_settings is null || _settingsStore is null)
         {
             return;
         }
 
-        _settings.ShowTaskbarBar = visible;
-        _settingsStore.Save(_settings);
         if (visible)
         {
-            _taskbarWindow.Show();
-            _taskbarWindow.EnsurePlacement();
+            ReloadSettingsFromDisk(recreateTaskbar: false);
+            if (_settings is null || _settingsStore is null)
+            {
+                return;
+            }
+
+            _settings.ShowTaskbarBar = true;
+            _settingsStore.Save(_settings);
+            CloseTaskbarWindow();
+            CreateTaskbarWindow();
+            _taskbarWindow?.Show();
+            _taskbarWindow?.EnsurePlacement();
         }
         else
         {
-            _taskbarWindow.Hide();
+            _settings.ShowTaskbarBar = false;
+            _settingsStore.Save(_settings);
+            CloseTaskbarWindow();
         }
 
-        if (_taskbarMenuItem is not null)
+        UpdateTaskbarMenuState(visible);
+    }
+
+    private void ActivateExistingInstance()
+    {
+        if (_isExiting)
         {
-            _taskbarMenuItem.Checked = visible;
+            return;
         }
+
+        ReloadSettingsFromDisk();
+        ShowWindow();
+    }
+
+    private void ReloadSettingsFromDisk(bool recreateTaskbar = true)
+    {
+        if (_settingsStore is null)
+        {
+            return;
+        }
+
+        _settings = _settingsStore.Load();
+        _window?.SetRefreshInterval(TimeSpan.FromSeconds(_settings.RefreshIntervalSeconds));
+        foreach (var pair in _refreshIntervalMenuItems)
+        {
+            pair.Value.Checked = pair.Key == _settings.RefreshIntervalSeconds;
+        }
+
+        if (recreateTaskbar)
+        {
+            CloseTaskbarWindow();
+            if (_settings.ShowTaskbarBar)
+            {
+                CreateTaskbarWindow();
+                _taskbarWindow?.Show();
+            }
+        }
+
+        UpdateTaskbarMenuState(_settings.ShowTaskbarBar);
+    }
+
+    private void UpdateTaskbarMenuState(bool visible)
+    {
+        if (_taskbarMenuItem is null)
+        {
+            return;
+        }
+
+        _taskbarMenuItem.Checked = visible;
+        _taskbarMenuItem.Text = visible ? "隐藏任务栏文本条" : "显示任务栏文本条";
     }
 
     private void OnExitRequested(object? sender, EventArgs e) => ExitApplication();
@@ -300,7 +392,7 @@ public partial class App : System.Windows.Application
 
         _window?.AllowClose();
         _window?.Close();
-        _taskbarWindow?.Close();
+        CloseTaskbarWindow();
 
         if (_viewModel is not null)
         {
@@ -320,6 +412,9 @@ public partial class App : System.Windows.Application
         }
 
         _currentIcon?.Dispose();
+
+        _activationRegistration?.Unregister(null);
+        _activationEvent?.Dispose();
 
         if (_ownsSingleInstanceMutex)
         {
