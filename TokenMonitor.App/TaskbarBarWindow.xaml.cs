@@ -55,7 +55,7 @@ public partial class TaskbarBarWindow : Window
             this,
             _settings.TaskbarPositionRatio,
             verticalOffsetDip: _settings.TaskbarWindowOffsetTop);
-        var hostText = result.IsEmbedded ? "已嵌入任务栏" : "覆盖层回退";
+        var hostText = result.IsEmbedded ? "已嵌入任务栏" : "任务栏覆盖层";
         var collisionText = result.TrafficMonitorDetected
             ? result.AvoidedCollision ? " · 已避让 TrafficMonitor" : " · 需要手动调整位置"
             : string.Empty;

@@ -226,9 +226,11 @@ public sealed class CodexQuotaProvider : IQuotaProvider, IAsyncDisposable
         }
 
         DateTimeOffset? resetAt = null;
-        if (window.TryGetProperty("resetsAt", out var resetElement) && resetElement.TryGetInt64(out var resetSeconds))
+        if (window.TryGetProperty("resetsAt", out var resetElement) && resetElement.TryGetInt64(out var resetTimestamp))
         {
-            resetAt = DateTimeOffset.FromUnixTimeSeconds(resetSeconds);
+            resetAt = resetTimestamp > 9_999_999_999
+                ? DateTimeOffset.FromUnixTimeMilliseconds(resetTimestamp)
+                : DateTimeOffset.FromUnixTimeSeconds(resetTimestamp);
         }
 
         TimeSpan? duration = null;

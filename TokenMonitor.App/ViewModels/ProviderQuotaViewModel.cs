@@ -201,13 +201,15 @@ public sealed class ProviderQuotaViewModel : ObservableObject
 
     private static string FormatCompactDuration(TimeSpan duration)
     {
-        var totalHours = Math.Max(0, (int)Math.Floor(duration.TotalHours));
-        return $"{totalHours:00}:{duration.Minutes:00}";
+        var totalMinutes = Math.Max(0, (int)Math.Ceiling(duration.TotalMinutes));
+        var hours = totalMinutes / 60;
+        var minutes = totalMinutes % 60;
+        return $"{hours:00}:{minutes:00}";
     }
 
     private static string FormatWeeklyCompactDuration(TimeSpan duration)
     {
-        var totalMinutes = Math.Max(0, (int)Math.Floor(duration.TotalMinutes));
+        var totalMinutes = Math.Max(0, (int)Math.Ceiling(duration.TotalMinutes));
         var days = totalMinutes / (24 * 60);
         var hours = totalMinutes / 60 % 24;
         var minutes = totalMinutes % 60;

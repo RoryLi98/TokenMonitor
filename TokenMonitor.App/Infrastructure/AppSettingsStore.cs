@@ -41,10 +41,11 @@ internal sealed class AppSettingsStore
 
     public AppSettingsStore()
     {
-        _settingsPath = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "TokenMonitor",
-            "settings.json");
+        // Keep one portable settings file beside the executable. LocalAppData can be
+        // transparently redirected when TokenMonitor is launched by a packaged app
+        // (for example Codex Desktop), causing Explorer launches to see another file.
+        _settingsPath = Path.Combine(AppContext.BaseDirectory, "settings.json");
+        TryMigrateLegacySettings();
     }
 
     public AppSettings Load()
@@ -113,6 +114,57 @@ internal sealed class AppSettingsStore
         catch
         {
             // Settings persistence must never prevent the monitor from running.
+        }
+    }
+
+    private void TryMigrateLegacySettings()
+    {
+        if (File.Exists(_settingsPath))
+        {
+            return;
+        }
+
+        try
+        {
+            var candidates = new List<string>();
+            var localAppData = Environment.GetFolderPath(
+                Environment.SpecialFolder.LocalApplicationData);
+            candidates.Add(Path.Combine(localAppData, "TokenMonitor", "settings.json"));
+
+            var packagesDirectory = Path.Combine(localAppData, "Packages");
+            if (Directory.Exists(packagesDirectory))
+            {
+                foreach (var codexPackage in Directory.EnumerateDirectories(
+                    packagesDirectory,
+                    "OpenAI.Codex_*",
+                    SearchOption.TopDirectoryOnly))
+                {
+                    candidates.Add(Path.Combine(
+                        codexPackage,
+                        "LocalCache",
+                        "Local",
+                        "TokenMonitor",
+                        "settings.json"));
+                }
+            }
+
+            var source = candidates
+                .Where(File.Exists)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderByDescending(File.GetLastWriteTimeUtc)
+                .FirstOrDefault();
+            if (source is null)
+            {
+                return;
+            }
+
+            var directory = Path.GetDirectoryName(_settingsPath)!;
+            Directory.CreateDirectory(directory);
+            File.Copy(source, _settingsPath, overwrite: false);
+        }
+        catch
+        {
+            // If migration is unavailable, Load will use defaults and Save can retry later.
         }
     }
 }

@@ -9,7 +9,7 @@ TokenMonitor 是一款 Windows 任务栏额度监视器，用来显示本机已�
 
 - 在 Windows 任务栏中以双行纯文字显示 Codex 和 Claude。
 - Codex：显示 5 小时剩余额度、5 小时刷新时间、周剩余额度和周刷新时间。
-- Claude Desktop：显示 5 小时剩余额度和估算刷新时间。
+- Claude Desktop：显示 5 小时剩余额度和服务端返回的精确刷新时间；内部缓存不可用时自动退回历史样本估算。
 - Claude 暂无可读取的周额度数据，任务栏中的周剩余额度和周刷新时间支持填写自定义文字或留空。
 - 可分别自定义 Codex/Claude 的：
   - 5h 剩余额度文字；
@@ -27,7 +27,7 @@ TokenMonitor 是一款 Windows 任务栏额度监视器，用来显示本机已�
 | 服务 | 数据来源 | 5h 额度 | 5h 刷新时间 | 周额度 | 周刷新时间 |
 | --- | --- | :---: | :---: | :---: | :---: |
 | Codex | 本机 `codex app-server` | ✅ | ✅ 精确 | ✅ | ✅ 精确 |
-| Claude Desktop | 本机 `plan-usage-history.json` | ✅ | ⚠️ 估算 | ❌ 自定义占位文字 | ❌ 自定义占位文字 |
+| Claude Desktop | 本机用量历史与 IndexedDB 缓存 | ✅ | ✅ 精确（可回退估算） | ❌ 自定义占位文字 | ❌ 自定义占位文字 |
 | Claude 网页版 / API | 不支持 | ❌ | ❌ | ❌ | ❌ |
 
 ### Codex
@@ -36,7 +36,7 @@ TokenMonitor 启动本机 Codex CLI 的 `app-server`，调用 `account/rateLimit
 
 ### Claude Desktop
 
-TokenMonitor 只读取 **Claude Desktop 桌面应用**保存在本机的用量历史文件。该文件不包含服务端返回的精确刷新时间，因此 5h 刷新时间是根据历史样本估算的，界面会用你设置的文字进行标记。
+TokenMonitor 只读取 **Claude Desktop 桌面应用**保存在本机的数据：从 `plan-usage-history.json` 获取用量百分比，并优先从 Claude 的 IndexedDB 本地缓存读取服务端返回的 `five_hour.resetsAt`。如果 Claude 更新后缓存字段暂时不存在或格式发生变化，程序会自动退回历史样本估算，并在界面中标记为估算值。
 
 Claude Desktop 当前没有在该本地文件中提供周额度百分比和周刷新时间，所以这两项不会被 TokenMonitor 猜测；你可以在任务栏显示设置中填写占位文字，或者留空隐藏文字。
 
@@ -58,7 +58,7 @@ Claude Desktop 当前没有在该本地文件中提供周额度百分比和周�
 设置保存在：
 
 ```text
-%LOCALAPPDATA%\TokenMonitor\settings.json
+TokenMonitor.exe 所在目录\settings.json
 ```
 
 设置文件只包含界面与刷新频率配置，不保存账号凭证。
@@ -105,8 +105,8 @@ dotnet publish .\TokenMonitor.App\TokenMonitor.App.csproj `
 ## 已知限制
 
 - Claude **仅支持桌面版**，不支持网页版和 API。
-- Claude 5h 刷新时间来自本地历史样本，是估算值而非服务端精确时间。
-- Claude Desktop 更新可能改变内部历史文件的位置或格式；无法识别时程序会显示读取错误，不会猜测额度。
+- Claude Desktop 的精确刷新时间依赖其内部 IndexedDB 格式；格式无法识别时会退回历史样本估算。
+- Claude Desktop 更新可能改变内部文件的位置或格式；无法读取用量百分比时程序会显示读取错误。
 - Claude Desktop 当前无法提供周额度数据。
 - 当前主要针对 Windows 11 底部水平任务栏设计；非标准任务栏工具、垂直任务栏或多显示器组合仍可能需要手动调整位置。
 - TokenMonitor 会避让正在运行的 TrafficMonitor，但无法保证识别所有第三方任务栏插件。

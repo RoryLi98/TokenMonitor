@@ -16,8 +16,6 @@ internal sealed class TaskbarPlacementService
 {
     private const int EdgePadding = 6;
     private const int CollisionGap = 6;
-    private IntPtr _embeddedWindowHandle;
-    private IntPtr _embeddedTaskbarHandle;
 
     public TaskbarPlacementResult Place(
         Window window,
@@ -32,7 +30,7 @@ internal sealed class TaskbarPlacementService
         }
 
         var windowHandle = new WindowInteropHelper(window).Handle;
-        var isEmbedded = AttachToTaskbar(windowHandle, snapshot.TaskbarHandle);
+        PrepareTaskbarOverlay(windowHandle);
 
         var scale = snapshot.Dpi / 96d;
         var width = Math.Max(1, (int)Math.Round((window.ActualWidth > 0 ? window.ActualWidth : window.Width) * scale));
@@ -77,83 +75,49 @@ internal sealed class TaskbarPlacementService
         var candidate = new PixelRect(resolvedX, y, resolvedX + width, y + height);
         var avoidedCollision = !blockers.Any(candidate.IntersectsWith);
 
-        if (isEmbedded)
-        {
-            _ = MoveWindow(
-                windowHandle,
-                resolvedX - taskbar.Left,
-                y - taskbar.Top,
-                width,
-                height,
-                true);
-        }
-        else
-        {
-            window.Left = resolvedX / scale;
-            window.Top = y / scale;
-        }
+        window.Left = resolvedX / scale;
+        window.Top = y / scale;
+        _ = SetWindowPos(
+            windowHandle,
+            HwndTopmost,
+            resolvedX,
+            y,
+            width,
+            height,
+            SwpNoActivate | SwpShowWindow);
 
         var resolvedRatio = maxX == minX ? 0d : (resolvedX - minX) / (double)(maxX - minX);
         return new TaskbarPlacementResult(
             Math.Clamp(resolvedRatio, 0, 1),
             snapshot.TrafficMonitorRegions.Count > 0,
             avoidedCollision,
-            isEmbedded);
+            IsEmbedded: false);
     }
 
-    public bool IsEmbedded(Window window)
-    {
-        var handle = new WindowInteropHelper(window).Handle;
-        var taskbarHandle = FindWindow("Shell_TrayWnd", null);
-        return handle != IntPtr.Zero
-            && taskbarHandle != IntPtr.Zero
-            && handle == _embeddedWindowHandle
-            && taskbarHandle == _embeddedTaskbarHandle;
-    }
+    public bool IsEmbedded(Window window) => false;
 
-    private bool AttachToTaskbar(IntPtr windowHandle, IntPtr taskbarHandle)
+    private static void PrepareTaskbarOverlay(IntPtr windowHandle)
     {
-        if (windowHandle == IntPtr.Zero || taskbarHandle == IntPtr.Zero)
+        if (windowHandle == IntPtr.Zero)
         {
-            return false;
-        }
-
-        if (windowHandle == _embeddedWindowHandle && taskbarHandle == _embeddedTaskbarHandle)
-        {
-            return true;
+            return;
         }
 
         var extendedStyle = GetWindowLongPtr(windowHandle, GwlExStyle).ToInt64();
-        _ = SetWindowLongPtr(windowHandle, GwlExStyle, new IntPtr(extendedStyle | WsExToolWindow));
+        _ = SetWindowLongPtr(
+            windowHandle,
+            GwlExStyle,
+            new IntPtr(extendedStyle | WsExToolWindow | WsExNoActivate));
 
-        // WPF continuously synchronizes a top-level window's screen coordinates. Unlike
-        // TrafficMonitor's native MFC dialog, leaving WS_POPUP set after SetParent makes
-        // WPF reapply screen coordinates as child coordinates. Use the documented child
-        // style combination so WPF and User32 agree on the coordinate space.
-        var originalStyle = GetWindowLongPtr(windowHandle, GwlStyle).ToInt64();
-        var childStyle = (originalStyle & ~WsPopup) | WsChild;
-        _ = SetWindowLongPtr(windowHandle, GwlStyle, new IntPtr(childStyle));
-
-        SetLastErrorNative(0);
-        var previousParent = SetParent(windowHandle, taskbarHandle);
-        var error = Marshal.GetLastWin32Error();
-
-        // TrafficMonitor deliberately keeps WS_POPUP when calling SetParent. For a popup,
-        // GetParent/IsChild describe its owner/style semantics and cannot verify the native
-        // parent field. SetParent can also return zero on success when there was no previous
-        // parent, so the Win32 last-error value is the reliable failure signal here.
-        var attached = previousParent != IntPtr.Zero || error == 0;
-        if (attached)
-        {
-            _embeddedWindowHandle = windowHandle;
-            _embeddedTaskbarHandle = taskbarHandle;
-        }
-        else
-        {
-            _ = SetWindowLongPtr(windowHandle, GwlStyle, new IntPtr(originalStyle));
-        }
-
-        return attached;
+        // Windows 11 renders most of the taskbar through a compositor surface. A real
+        // WS_CHILD can be reported as visible while remaining underneath that surface.
+        // TrafficMonitor-style text therefore stays a non-activating top-level popup
+        // positioned over the taskbar instead of becoming a Shell_TrayWnd child.
+        var style = GetWindowLongPtr(windowHandle, GwlStyle).ToInt64();
+        _ = SetWindowLongPtr(
+            windowHandle,
+            GwlStyle,
+            new IntPtr((style & ~WsChild) | WsPopup));
     }
 
     private static int FindNearestClearX(
@@ -353,6 +317,10 @@ internal sealed class TaskbarPlacementService
     private const long WsChild = 0x40000000L;
     private const long WsPopup = 0x80000000L;
     private const long WsExToolWindow = 0x00000080L;
+    private const long WsExNoActivate = 0x08000000L;
+    private const uint SwpNoActivate = 0x0010;
+    private const uint SwpShowWindow = 0x0040;
+    private static readonly IntPtr HwndTopmost = new(-1);
 
     private static string ReadWindowClassName(IntPtr handle)
     {
@@ -380,13 +348,14 @@ internal sealed class TaskbarPlacementService
     private static extern bool GetWindowRect(IntPtr handle, out NativeRect rect);
 
     [DllImport("user32.dll", SetLastError = true)]
-    private static extern IntPtr SetParent(IntPtr child, IntPtr newParent);
-
-    [DllImport("user32.dll", SetLastError = true)]
-    private static extern bool MoveWindow(IntPtr handle, int x, int y, int width, int height, bool repaint);
-
-    [DllImport("kernel32.dll", EntryPoint = "SetLastError")]
-    private static extern void SetLastErrorNative(uint errorCode);
+    private static extern bool SetWindowPos(
+        IntPtr handle,
+        IntPtr insertAfter,
+        int x,
+        int y,
+        int width,
+        int height,
+        uint flags);
 
     [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW", SetLastError = true)]
     private static extern IntPtr GetWindowLongPtr(IntPtr handle, int index);
