@@ -17,19 +17,21 @@
         UseLayoutRounding="True"
         SnapsToDevicePixels="True">
     <Window.ContextMenu>
-        <ContextMenu>
+        <ContextMenu x:Name="TaskbarContextMenu">
             <MenuItem Header="打开详情" Click="OpenMenuItem_Click" />
             <MenuItem Header="立即刷新" Click="RefreshMenuItem_Click" />
             <Separator />
             <MenuItem Header="任务栏显示设置…" Click="SettingsMenuItem_Click" />
             <MenuItem Header="自动选择空白位置" Click="AutoPlaceMenuItem_Click" />
+            <MenuItem Header="固定任务栏文本条" Click="LockMenuItem_Click" />
             <MenuItem Header="隐藏任务栏文本条" Click="HideMenuItem_Click" />
             <Separator />
             <MenuItem Header="退出 TokenMonitor" Click="ExitMenuItem_Click" />
         </ContextMenu>
     </Window.ContextMenu>
 
-    <Grid Cursor="SizeAll"
+    <Grid x:Name="RootGrid"
+          Cursor="SizeAll"
           ToolTip="{Binding TaskbarTooltip}"
           MouseLeftButtonDown="Root_MouseLeftButtonDown">
         <Grid x:Name="TwoLineTextRoot"

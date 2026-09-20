@@ -6,6 +6,7 @@ namespace TokenMonitor.App;
 public partial class TaskbarSettingsWindow : Window
 {
     private readonly AppSettings _settings;
+    private bool _restoreDefaultsRequested;
 
     internal TaskbarSettingsWindow(AppSettings settings)
     {
@@ -34,26 +35,30 @@ public partial class TaskbarSettingsWindow : Window
         ItemSpacingTextBox.Text = _settings.TaskbarItemSpacing.ToString();
         VerticalMarginTextBox.Text = _settings.TaskbarVerticalMargin.ToString();
         WindowOffsetTopTextBox.Text = _settings.TaskbarWindowOffsetTop.ToString();
+        LockTaskbarCheckBox.IsChecked = _settings.TaskbarLocked;
     }
 
     private void RestoreDefaultsButton_Click(object sender, RoutedEventArgs e)
     {
-        CodexLabelTextBox.Text = "Codex";
-        ClaudeLabelTextBox.Text = "Claude";
-        CodexCountdownPrefixTextBox.Text = string.Empty;
-        ClaudeCountdownPrefixTextBox.Text = "~";
-        ShowPercentCheckBox.IsChecked = true;
-        ShowCountdownCheckBox.IsChecked = true;
-        ShowWeeklyQuotaCheckBox.IsChecked = true;
-        CodexWeeklyRemainingTextBox.Text = "周 ";
-        CodexWeeklyResetTextBox.Text = string.Empty;
-        ClaudeWeeklyRemainingTextBox.Text = "周 --";
-        ClaudeWeeklyResetTextBox.Text = "--:--";
-        FontFamilyTextBox.Text = "Segoe UI";
-        FontSizeTextBox.Text = "9";
-        ItemSpacingTextBox.Text = "0";
-        VerticalMarginTextBox.Text = "0";
-        WindowOffsetTopTextBox.Text = "0";
+        var defaults = new AppSettings();
+        CodexLabelTextBox.Text = defaults.TaskbarCodexLabel;
+        ClaudeLabelTextBox.Text = defaults.TaskbarClaudeLabel;
+        CodexCountdownPrefixTextBox.Text = defaults.TaskbarCodexCountdownPrefix;
+        ClaudeCountdownPrefixTextBox.Text = defaults.TaskbarClaudeCountdownPrefix;
+        ShowPercentCheckBox.IsChecked = defaults.TaskbarShowPercent;
+        ShowCountdownCheckBox.IsChecked = defaults.TaskbarShowCountdown;
+        ShowWeeklyQuotaCheckBox.IsChecked = defaults.TaskbarShowWeeklyQuota;
+        CodexWeeklyRemainingTextBox.Text = defaults.TaskbarCodexWeeklyRemainingText;
+        CodexWeeklyResetTextBox.Text = defaults.TaskbarCodexWeeklyResetText;
+        ClaudeWeeklyRemainingTextBox.Text = defaults.TaskbarClaudeWeeklyRemainingText;
+        ClaudeWeeklyResetTextBox.Text = defaults.TaskbarClaudeWeeklyResetText;
+        FontFamilyTextBox.Text = defaults.TaskbarFontFamily;
+        FontSizeTextBox.Text = defaults.TaskbarFontSizePoints.ToString();
+        ItemSpacingTextBox.Text = defaults.TaskbarItemSpacing.ToString();
+        VerticalMarginTextBox.Text = defaults.TaskbarVerticalMargin.ToString();
+        WindowOffsetTopTextBox.Text = defaults.TaskbarWindowOffsetTop.ToString();
+        LockTaskbarCheckBox.IsChecked = defaults.TaskbarLocked;
+        _restoreDefaultsRequested = true;
     }
 
     private void SaveButton_Click(object sender, RoutedEventArgs e)
@@ -97,6 +102,13 @@ public partial class TaskbarSettingsWindow : Window
         _settings.TaskbarItemSpacing = itemSpacing;
         _settings.TaskbarVerticalMargin = verticalMargin;
         _settings.TaskbarWindowOffsetTop = offsetTop;
+        _settings.TaskbarLocked = LockTaskbarCheckBox.IsChecked == true;
+        if (_restoreDefaultsRequested)
+        {
+            var defaults = new AppSettings();
+            _settings.TaskbarPositionRatio = defaults.TaskbarPositionRatio;
+            _settings.TaskbarMonitorDeviceName = defaults.TaskbarMonitorDeviceName;
+        }
         DialogResult = true;
     }
 

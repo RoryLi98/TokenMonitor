@@ -89,6 +89,13 @@
 
             <TabItem Header="布局">
                 <StackPanel Margin="12">
+                    <CheckBox x:Name="LockTaskbarCheckBox"
+                              Margin="2,2,0,8"
+                              Content="固定任务栏文本条位置" />
+                    <TextBlock Margin="2,0,0,10"
+                               Foreground="#667085"
+                               TextWrapping="Wrap"
+                               Text="固定后不能拖动，并禁用文本条右键菜单；可从托盘图标右键菜单取消固定。" />
                     <GroupBox Header="任务栏布局参数" Padding="10,8">
                         <Grid>
                             <Grid.ColumnDefinitions>

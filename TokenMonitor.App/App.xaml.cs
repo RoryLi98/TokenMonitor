@@ -27,6 +27,7 @@ public partial class App : System.Windows.Application
     private AppSettingsStore? _settingsStore;
     private AppSettings? _settings;
     private Forms.ToolStripMenuItem? _taskbarMenuItem;
+    private Forms.ToolStripMenuItem? _taskbarLockMenuItem;
     private readonly Dictionary<int, Forms.ToolStripMenuItem> _refreshIntervalMenuItems = new();
 
     protected override void OnStartup(StartupEventArgs e)
@@ -110,6 +111,7 @@ public partial class App : System.Windows.Application
         taskbarWindow.OpenRequested += (_, _) => ShowWindow();
         taskbarWindow.RefreshRequested += (_, _) => _viewModel.RefreshCommand.Execute(null);
         taskbarWindow.SettingsRequested += (_, _) => ShowTaskbarSettings();
+        taskbarWindow.LockRequested += (_, _) => SetTaskbarLocked(true);
         taskbarWindow.HideRequested += (_, _) => SetTaskbarBarVisible(false);
         taskbarWindow.ExitRequested += OnExitRequested;
         _taskbarWindow = taskbarWindow;
@@ -181,6 +183,16 @@ public partial class App : System.Windows.Application
             () => SetTaskbarBarVisible(!(_settings?.ShowTaskbarBar ?? false)));
         UpdateTaskbarMenuState(_settings?.ShowTaskbarBar ?? false);
         menu.Items.Add(_taskbarMenuItem);
+
+        _taskbarLockMenuItem = new Forms.ToolStripMenuItem("固定任务栏文本条位置")
+        {
+            Checked = _settings?.TaskbarLocked ?? false,
+            CheckOnClick = false,
+        };
+        _taskbarLockMenuItem.Click += (_, _) => Dispatcher.Invoke(
+            () => SetTaskbarLocked(!(_settings?.TaskbarLocked ?? false)));
+        UpdateTaskbarLockMenuState();
+        menu.Items.Add(_taskbarLockMenuItem);
         menu.Items.Add(new Forms.ToolStripSeparator());
         menu.Items.Add("退出", null, (_, _) => Dispatcher.Invoke(ExitApplication));
 
@@ -292,6 +304,20 @@ public partial class App : System.Windows.Application
 
         _settingsStore.Save(_settings);
         _taskbarWindow?.ApplyTaskbarTextSettings();
+        UpdateTaskbarLockMenuState();
+    }
+
+    private void SetTaskbarLocked(bool locked)
+    {
+        if (_settings is null || _settingsStore is null)
+        {
+            return;
+        }
+
+        _settings.TaskbarLocked = locked;
+        _settingsStore.Save(_settings);
+        _taskbarWindow?.ApplyInteractionSettings();
+        UpdateTaskbarLockMenuState();
     }
 
     private void SetTaskbarBarVisible(bool visible)
@@ -362,6 +388,7 @@ public partial class App : System.Windows.Application
         }
 
         UpdateTaskbarMenuState(_settings.ShowTaskbarBar);
+        UpdateTaskbarLockMenuState();
     }
 
     private void UpdateTaskbarMenuState(bool visible)
@@ -373,6 +400,20 @@ public partial class App : System.Windows.Application
 
         _taskbarMenuItem.Checked = visible;
         _taskbarMenuItem.Text = visible ? "隐藏任务栏文本条" : "显示任务栏文本条";
+    }
+
+    private void UpdateTaskbarLockMenuState()
+    {
+        if (_taskbarLockMenuItem is null)
+        {
+            return;
+        }
+
+        var locked = _settings?.TaskbarLocked ?? false;
+        _taskbarLockMenuItem.Checked = locked;
+        _taskbarLockMenuItem.Text = locked
+            ? "取消固定任务栏文本条位置"
+            : "固定任务栏文本条位置";
     }
 
     private void OnExitRequested(object? sender, EventArgs e) => ExitApplication();

@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\TokenMonitor.Core\TokenMonitor.Core.csproj" />
+    <Resource Include="Assets\logo.png" />
   </ItemGroup>
 
   <PropertyGroup>
@@ -14,7 +15,9 @@
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <AssemblyName>TokenMonitor</AssemblyName>
     <RootNamespace>TokenMonitor.App</RootNamespace>
+    <Version>0.2.0</Version>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\TokenMonitor.ico</ApplicationIcon>
   </PropertyGroup>
 
 </Project>

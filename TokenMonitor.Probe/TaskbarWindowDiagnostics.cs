@@ -7,14 +7,29 @@ internal static class TaskbarWindowDiagnostics
 {
     public static void WriteToConsole()
     {
-        var taskbar = FindWindow("Shell_TrayWnd", null);
+        var primaryTaskbar = FindWindow("Shell_TrayWnd", null);
+        var taskbarHandles = new HashSet<IntPtr>();
+        if (primaryTaskbar != IntPtr.Zero)
+        {
+            taskbarHandles.Add(primaryTaskbar);
+        }
+
+        EnumWindows((handle, _) =>
+        {
+            if (ReadClassName(handle) == "Shell_SecondaryTrayWnd")
+            {
+                taskbarHandles.Add(handle);
+            }
+
+            return true;
+        }, IntPtr.Zero);
+
         var targetProcessIds = Process.GetProcesses()
             .Where(process => process.ProcessName is "TokenMonitor" or "TrafficMonitor")
             .ToDictionary(process => process.Id, process => process.ProcessName);
 
         var windows = new List<object>();
         var addedHandles = new HashSet<IntPtr>();
-        _ = GetWindowRect(taskbar, out var taskbarRect);
 
         bool AddTargetWindow(IntPtr handle)
         {
@@ -35,7 +50,7 @@ internal static class TaskbarWindowDiagnostics
                 className = ReadClassName(handle),
                 parentHandle = parent.ToInt64(),
                 parentClassName = ReadClassName(parent),
-                isChildOfTaskbar = IsChild(taskbar, handle),
+                isChildOfTaskbar = taskbarHandles.Any(taskbar => IsChild(taskbar, handle)),
                 visible = IsWindowVisible(handle),
                 rect = new { rect.Left, rect.Top, rect.Right, rect.Bottom },
             });
@@ -43,13 +58,26 @@ internal static class TaskbarWindowDiagnostics
         }
 
         EnumWindows((handle, parameter) => AddTargetWindow(handle), IntPtr.Zero);
-        EnumChildWindows(taskbar, (handle, parameter) => AddTargetWindow(handle), IntPtr.Zero);
+        foreach (var taskbar in taskbarHandles)
+        {
+            EnumChildWindows(taskbar, (handle, parameter) => AddTargetWindow(handle), IntPtr.Zero);
+        }
+
+        var taskbars = taskbarHandles.Select(handle =>
+        {
+            _ = GetWindowRect(handle, out var rect);
+            return new
+            {
+                handle = handle.ToInt64(),
+                className = ReadClassName(handle),
+                isPrimary = handle == primaryTaskbar,
+                rect = new { rect.Left, rect.Top, rect.Right, rect.Bottom },
+            };
+        }).ToArray();
 
         Console.WriteLine(JsonSerializer.Serialize(new
         {
-            taskbarHandle = taskbar.ToInt64(),
-            taskbarClassName = ReadClassName(taskbar),
-            taskbarRect = new { taskbarRect.Left, taskbarRect.Top, taskbarRect.Right, taskbarRect.Bottom },
+            taskbars,
             windows,
         }));
     }

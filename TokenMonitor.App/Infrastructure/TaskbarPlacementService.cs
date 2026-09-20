@@ -3,11 +3,13 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Windows;
 using System.Windows.Interop;
+using System.Windows.Media;
 
 namespace TokenMonitor.App.Infrastructure;
 
 internal sealed record TaskbarPlacementResult(
     double PositionRatio,
+    string? MonitorDeviceName,
     bool TrafficMonitorDetected,
     bool AvoidedCollision,
     bool IsEmbedded);
@@ -21,20 +23,37 @@ internal sealed class TaskbarPlacementService
         Window window,
         double? preferredRatio,
         double? desiredLeftDip = null,
-        int verticalOffsetDip = 0)
+        int verticalOffsetDip = 0,
+        string? preferredMonitorDeviceName = null)
     {
-        var snapshot = NativeTaskbarSnapshot.Capture();
+        var windowHandle = new WindowInteropHelper(window).Handle;
+        var snapshots = NativeTaskbarSnapshot.CaptureAll()
+            .Where(candidate => candidate.Taskbar.IsHorizontal)
+            .ToArray();
+        var hasCurrentWindowRect = TryGetRect(windowHandle, out var currentWindowRect);
+        var snapshot = SelectTaskbar(
+            snapshots,
+            preferredMonitorDeviceName,
+            desiredLeftDip is not null && hasCurrentWindowRect ? currentWindowRect : null);
         if (snapshot is null || !snapshot.Taskbar.IsHorizontal)
         {
             return PlaceFallback(window, preferredRatio);
         }
 
-        var windowHandle = new WindowInteropHelper(window).Handle;
         PrepareTaskbarOverlay(windowHandle);
 
         var scale = snapshot.Dpi / 96d;
-        var width = Math.Max(1, (int)Math.Round((window.ActualWidth > 0 ? window.ActualWidth : window.Width) * scale));
-        var height = Math.Max(1, (int)Math.Round((window.ActualHeight > 0 ? window.ActualHeight : window.Height) * scale));
+        // WPF owns the HWND size and already applies per-monitor DPI scaling. Feeding a
+        // taskbar-scaled width/height back through SetWindowPos makes WPF adopt that size,
+        // then scales it again on the next placement tick. On a non-100% DPI monitor this
+        // grows the transparent window exponentially and destroys both height and dragging.
+        // Always use the current native size for collision calculations and move only.
+        var width = hasCurrentWindowRect && currentWindowRect.Width > 0
+            ? currentWindowRect.Width
+            : Math.Max(1, (int)Math.Round(window.Width * VisualTreeHelper.GetDpi(window).DpiScaleX));
+        var height = hasCurrentWindowRect && currentWindowRect.Height > 0
+            ? currentWindowRect.Height
+            : Math.Max(1, (int)Math.Round(window.Height * VisualTreeHelper.GetDpi(window).DpiScaleY));
         var taskbar = snapshot.Taskbar;
         var minX = taskbar.Left + EdgePadding;
         var maxX = Math.Max(minX, taskbar.Right - width - EdgePadding);
@@ -48,18 +67,18 @@ internal sealed class TaskbarPlacementService
             .ToArray();
 
         int desiredX;
-        if (desiredLeftDip is { } draggedLeft)
+        if (desiredLeftDip is not null && hasCurrentWindowRect)
         {
-            desiredX = (int)Math.Round(draggedLeft * scale);
+            desiredX = currentWindowRect.Left;
+        }
+        else if (preferredRatio is { } ratio)
+        {
+            desiredX = minX + (int)Math.Round(Math.Clamp(ratio, 0, 1) * Math.Max(0, maxX - minX));
         }
         else if (snapshot.TrafficMonitorRegions.Count > 0)
         {
             var leftmostTraffic = snapshot.TrafficMonitorRegions.MinBy(rect => rect.Left);
             desiredX = leftmostTraffic.Left - width - CollisionGap;
-        }
-        else if (preferredRatio is { } ratio)
-        {
-            desiredX = minX + (int)Math.Round(Math.Clamp(ratio, 0, 1) * Math.Max(0, maxX - minX));
         }
         else if (snapshot.NotificationArea is { } notificationArea)
         {
@@ -75,26 +94,65 @@ internal sealed class TaskbarPlacementService
         var candidate = new PixelRect(resolvedX, y, resolvedX + width, y + height);
         var avoidedCollision = !blockers.Any(candidate.IntersectsWith);
 
-        window.Left = resolvedX / scale;
-        window.Top = y / scale;
         _ = SetWindowPos(
             windowHandle,
             HwndTopmost,
             resolvedX,
             y,
-            width,
-            height,
-            SwpNoActivate | SwpShowWindow);
+            0,
+            0,
+            SwpNoActivate | SwpNoSize | SwpShowWindow);
 
         var resolvedRatio = maxX == minX ? 0d : (resolvedX - minX) / (double)(maxX - minX);
         return new TaskbarPlacementResult(
             Math.Clamp(resolvedRatio, 0, 1),
+            snapshot.MonitorDeviceName,
             snapshot.TrafficMonitorRegions.Count > 0,
             avoidedCollision,
             IsEmbedded: false);
     }
 
     public bool IsEmbedded(Window window) => false;
+
+    private static NativeTaskbarSnapshot? SelectTaskbar(
+        IReadOnlyList<NativeTaskbarSnapshot> snapshots,
+        string? preferredMonitorDeviceName,
+        PixelRect? currentWindowRect)
+    {
+        if (snapshots.Count == 0)
+        {
+            return null;
+        }
+
+        if (currentWindowRect is { } draggedWindow)
+        {
+            var centerX = draggedWindow.Left + draggedWindow.Width / 2;
+            var centerY = draggedWindow.Top + draggedWindow.Height / 2;
+            return snapshots.MinBy(candidate => DistanceSquaredToRect(centerX, centerY, candidate.Taskbar));
+        }
+
+        if (!string.IsNullOrWhiteSpace(preferredMonitorDeviceName))
+        {
+            var preferred = snapshots.FirstOrDefault(candidate =>
+                string.Equals(
+                    candidate.MonitorDeviceName,
+                    preferredMonitorDeviceName,
+                    StringComparison.OrdinalIgnoreCase));
+            if (preferred is not null)
+            {
+                return preferred;
+            }
+        }
+
+        return snapshots.FirstOrDefault(candidate => candidate.IsPrimary) ?? snapshots[0];
+    }
+
+    private static long DistanceSquaredToRect(int x, int y, PixelRect rect)
+    {
+        var dx = x < rect.Left ? rect.Left - x : x > rect.Right ? x - rect.Right : 0;
+        var dy = y < rect.Top ? rect.Top - y : y > rect.Bottom ? y - rect.Bottom : 0;
+        return (long)dx * dx + (long)dy * dy;
+    }
 
     private static void PrepareTaskbarOverlay(IntPtr windowHandle)
     {
@@ -166,24 +224,65 @@ internal sealed class TaskbarPlacementService
             : workArea.Right - window.Width - 12;
         window.Left = left;
         window.Top = workArea.Bottom - window.Height;
-        return new TaskbarPlacementResult(preferredRatio ?? 1, false, false, false);
+        return new TaskbarPlacementResult(preferredRatio ?? 1, null, false, false, false);
     }
 
     private sealed record NativeTaskbarSnapshot(
         IntPtr TaskbarHandle,
         PixelRect Taskbar,
         uint Dpi,
+        string? MonitorDeviceName,
+        bool IsPrimary,
         PixelRect? NotificationArea,
         IReadOnlyList<PixelRect> TrafficMonitorRegions)
     {
-        public static NativeTaskbarSnapshot? Capture()
+        public static IReadOnlyList<NativeTaskbarSnapshot> CaptureAll()
         {
-            var taskbarHandle = FindWindow("Shell_TrayWnd", null);
-            if (taskbarHandle == IntPtr.Zero || !TryGetRect(taskbarHandle, out var taskbar))
+            var primaryTaskbarHandle = FindWindow("Shell_TrayWnd", null);
+            var taskbarHandles = new HashSet<IntPtr>();
+            if (primaryTaskbarHandle != IntPtr.Zero)
             {
-                return null;
+                taskbarHandles.Add(primaryTaskbarHandle);
             }
 
+            EnumWindows((handle, _) =>
+            {
+                if (string.Equals(
+                        ReadWindowClassName(handle),
+                        "Shell_SecondaryTrayWnd",
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    taskbarHandles.Add(handle);
+                }
+
+                return true;
+            }, IntPtr.Zero);
+
+            var trafficRegions = CaptureTrafficMonitorRegions(taskbarHandles);
+            var snapshots = new List<NativeTaskbarSnapshot>();
+            foreach (var taskbarHandle in taskbarHandles)
+            {
+                if (!TryGetRect(taskbarHandle, out var taskbar))
+                {
+                    continue;
+                }
+
+                snapshots.Add(CaptureTaskbar(
+                    taskbarHandle,
+                    taskbar,
+                    taskbarHandle == primaryTaskbarHandle,
+                    trafficRegions));
+            }
+
+            return snapshots;
+        }
+
+        private static NativeTaskbarSnapshot CaptureTaskbar(
+            IntPtr taskbarHandle,
+            PixelRect taskbar,
+            bool isPrimary,
+            IReadOnlyList<PixelRect> trafficRegions)
+        {
             var childHandles = new HashSet<IntPtr>();
             EnumChildWindows(taskbarHandle, (handle, _) =>
             {
@@ -203,6 +302,29 @@ internal sealed class TaskbarPlacementService
                 }
             }
 
+            uint dpi;
+            try
+            {
+                dpi = GetDpiForWindow(taskbarHandle);
+            }
+            catch
+            {
+                dpi = 96;
+            }
+
+            return new NativeTaskbarSnapshot(
+                taskbarHandle,
+                taskbar,
+                dpi == 0 ? 96u : dpi,
+                ReadMonitorDeviceName(taskbarHandle),
+                isPrimary,
+                notificationArea,
+                trafficRegions.Where(rect => rect.IntersectsWith(taskbar)).ToArray());
+        }
+
+        private static IReadOnlyList<PixelRect> CaptureTrafficMonitorRegions(
+            IReadOnlyCollection<IntPtr> taskbarHandles)
+        {
             var trafficHandles = new HashSet<IntPtr>();
             var trafficProcesses = Process.GetProcessesByName("TrafficMonitor");
             var trafficProcessIds = trafficProcesses.Select(process => process.Id).ToHashSet();
@@ -222,9 +344,13 @@ internal sealed class TaskbarPlacementService
                 return true;
             }, IntPtr.Zero);
 
-            foreach (var handle in childHandles)
+            foreach (var taskbarHandle in taskbarHandles)
             {
-                AddIfTrafficMonitor(handle);
+                EnumChildWindows(taskbarHandle, (handle, _) =>
+                {
+                    AddIfTrafficMonitor(handle);
+                    return true;
+                }, IntPtr.Zero);
             }
 
             foreach (var process in trafficProcesses)
@@ -250,24 +376,35 @@ internal sealed class TaskbarPlacementService
                 }
             }
 
-            var trafficRegions = trafficHandles
+            return trafficHandles
                 .Where(IsWindowVisible)
                 .Select(handle => TryGetRect(handle, out var rect) ? rect : default)
-                .Where(rect => rect.Width > 0 && rect.Height > 0 && rect.IntersectsWith(taskbar))
+                .Where(rect => rect.Width > 0 && rect.Height > 0)
                 .Distinct()
                 .ToArray();
+        }
 
-            uint dpi;
+        private static string? ReadMonitorDeviceName(IntPtr windowHandle)
+        {
+            var monitor = MonitorFromWindow(windowHandle, MonitorDefaultToNearest);
+            if (monitor == IntPtr.Zero)
+            {
+                return null;
+            }
+
+            var info = new MonitorInfoEx
+            {
+                Size = Marshal.SizeOf<MonitorInfoEx>(),
+                DeviceName = string.Empty,
+            };
             try
             {
-                dpi = GetDpiForWindow(taskbarHandle);
+                return GetMonitorInfo(monitor, ref info) ? info.DeviceName : null;
             }
             catch
             {
-                dpi = 96;
+                return null;
             }
-
-            return new NativeTaskbarSnapshot(taskbarHandle, taskbar, dpi == 0 ? 96u : dpi, notificationArea, trafficRegions);
         }
 
         private static string ReadClassName(IntPtr handle)
@@ -297,6 +434,18 @@ internal sealed class TaskbarPlacementService
         public int Bottom;
     }
 
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct MonitorInfoEx
+    {
+        public int Size;
+        public NativeRect Monitor;
+        public NativeRect WorkArea;
+        public uint Flags;
+
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)]
+        public string DeviceName;
+    }
+
     private readonly record struct PixelRect(int Left, int Top, int Right, int Bottom)
     {
         public int Width => Right - Left;
@@ -319,7 +468,9 @@ internal sealed class TaskbarPlacementService
     private const long WsExToolWindow = 0x00000080L;
     private const long WsExNoActivate = 0x08000000L;
     private const uint SwpNoActivate = 0x0010;
+    private const uint SwpNoSize = 0x0001;
     private const uint SwpShowWindow = 0x0040;
+    private const uint MonitorDefaultToNearest = 0x00000002;
     private static readonly IntPtr HwndTopmost = new(-1);
 
     private static string ReadWindowClassName(IntPtr handle)
@@ -327,6 +478,18 @@ internal sealed class TaskbarPlacementService
         var builder = new StringBuilder(128);
         _ = GetClassName(handle, builder, builder.Capacity);
         return builder.ToString();
+    }
+
+    private static bool TryGetRect(IntPtr handle, out PixelRect rect)
+    {
+        if (GetWindowRect(handle, out var nativeRect))
+        {
+            rect = new PixelRect(nativeRect.Left, nativeRect.Top, nativeRect.Right, nativeRect.Bottom);
+            return true;
+        }
+
+        rect = default;
+        return false;
     }
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
@@ -371,4 +534,10 @@ internal sealed class TaskbarPlacementService
 
     [DllImport("user32.dll")]
     private static extern uint GetDpiForWindow(IntPtr handle);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr MonitorFromWindow(IntPtr windowHandle, uint flags);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern bool GetMonitorInfo(IntPtr monitorHandle, ref MonitorInfoEx monitorInfo);
 }

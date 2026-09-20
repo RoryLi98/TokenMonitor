@@ -6,26 +6,28 @@ namespace TokenMonitor.App.Infrastructure;
 internal sealed class AppSettings
 {
     public bool ShowTaskbarBar { get; set; } = true;
-    public double? TaskbarPositionRatio { get; set; }
+    public double? TaskbarPositionRatio { get; set; } = 0.8354285714285714;
+    public string? TaskbarMonitorDeviceName { get; set; } = @"\\.\DISPLAY1";
+    public bool TaskbarLocked { get; set; } = true;
     public int RefreshIntervalSeconds { get; set; } = 60;
-    public string TaskbarCodexLabel { get; set; } = "Codex";
-    public string TaskbarClaudeLabel { get; set; } = "Claude";
-    public string TaskbarCodexCountdownPrefix { get; set; } = string.Empty;
-    public string TaskbarClaudeCountdownPrefix { get; set; } = "~";
+    public string TaskbarCodexLabel { get; set; } = "Codex 5h: ";
+    public string TaskbarClaudeLabel { get; set; } = "Claude 5h: ";
+    public string TaskbarCodexCountdownPrefix { get; set; } = "🔄: ";
+    public string TaskbarClaudeCountdownPrefix { get; set; } = "🔄: ";
     public bool TaskbarShowPercent { get; set; } = true;
     public bool TaskbarShowCountdown { get; set; } = true;
     public bool TaskbarShowWeeklyQuota { get; set; } = true;
-    public string TaskbarCodexWeeklyRemainingText { get; set; } = null!;
-    public string TaskbarCodexWeeklyResetText { get; set; } = null!;
-    public string TaskbarClaudeWeeklyRemainingText { get; set; } = null!;
-    public string TaskbarClaudeWeeklyResetText { get; set; } = null!;
+    public string TaskbarCodexWeeklyRemainingText { get; set; } = " W: ";
+    public string TaskbarCodexWeeklyResetText { get; set; } = "🔄: ";
+    public string TaskbarClaudeWeeklyRemainingText { get; set; } = " ";
+    public string TaskbarClaudeWeeklyResetText { get; set; } = string.Empty;
     // Kept for loading settings written by older builds.
-    public string TaskbarWeeklyLabel { get; set; } = "周 ";
-    public string TaskbarClaudeWeeklyPercentPlaceholder { get; set; } = "--";
-    public string TaskbarClaudeWeeklyCountdownPlaceholder { get; set; } = "--:--";
+    public string TaskbarWeeklyLabel { get; set; } = " Week: ";
+    public string TaskbarClaudeWeeklyPercentPlaceholder { get; set; } = string.Empty;
+    public string TaskbarClaudeWeeklyCountdownPlaceholder { get; set; } = string.Empty;
     public string TaskbarFontFamily { get; set; } = "Segoe UI";
     public int TaskbarFontSizePoints { get; set; } = 9;
-    public int TaskbarItemSpacing { get; set; }
+    public int TaskbarItemSpacing { get; set; } = 3;
     public int TaskbarVerticalMargin { get; set; }
     public int TaskbarWindowOffsetTop { get; set; }
 }
@@ -55,10 +57,7 @@ internal sealed class AppSettingsStore
             if (!File.Exists(_settingsPath))
             {
                 var defaults = new AppSettings();
-                defaults.TaskbarCodexWeeklyRemainingText = defaults.TaskbarWeeklyLabel;
-                defaults.TaskbarCodexWeeklyResetText = string.Empty;
-                defaults.TaskbarClaudeWeeklyRemainingText = defaults.TaskbarWeeklyLabel;
-                defaults.TaskbarClaudeWeeklyResetText = string.Empty;
+                Save(defaults);
                 return defaults;
             }
 
@@ -69,22 +68,27 @@ internal sealed class AppSettingsStore
                 settings.TaskbarPositionRatio = null;
             }
 
+            if (string.IsNullOrWhiteSpace(settings.TaskbarMonitorDeviceName))
+            {
+                settings.TaskbarMonitorDeviceName = null;
+            }
+
             if (settings.RefreshIntervalSeconds is not (30 or 60 or 120 or 300))
             {
                 settings.RefreshIntervalSeconds = 60;
             }
 
-            settings.TaskbarCodexLabel ??= "Codex";
-            settings.TaskbarClaudeLabel ??= "Claude";
-            settings.TaskbarCodexCountdownPrefix ??= string.Empty;
-            settings.TaskbarClaudeCountdownPrefix ??= "~";
-            settings.TaskbarWeeklyLabel ??= "周 ";
-            settings.TaskbarCodexWeeklyRemainingText ??= settings.TaskbarWeeklyLabel;
-            settings.TaskbarCodexWeeklyResetText ??= string.Empty;
-            settings.TaskbarClaudeWeeklyRemainingText ??= settings.TaskbarWeeklyLabel;
+            settings.TaskbarCodexLabel ??= "Codex 5h: ";
+            settings.TaskbarClaudeLabel ??= "Claude 5h: ";
+            settings.TaskbarCodexCountdownPrefix ??= "🔄: ";
+            settings.TaskbarClaudeCountdownPrefix ??= "🔄: ";
+            settings.TaskbarWeeklyLabel ??= " Week: ";
+            settings.TaskbarCodexWeeklyRemainingText ??= " W: ";
+            settings.TaskbarCodexWeeklyResetText ??= "🔄: ";
+            settings.TaskbarClaudeWeeklyRemainingText ??= " ";
             settings.TaskbarClaudeWeeklyResetText ??= string.Empty;
-            settings.TaskbarClaudeWeeklyPercentPlaceholder ??= "--";
-            settings.TaskbarClaudeWeeklyCountdownPlaceholder ??= "--:--";
+            settings.TaskbarClaudeWeeklyPercentPlaceholder ??= string.Empty;
+            settings.TaskbarClaudeWeeklyCountdownPlaceholder ??= string.Empty;
             if (string.IsNullOrWhiteSpace(settings.TaskbarFontFamily))
             {
                 settings.TaskbarFontFamily = "Segoe UI";

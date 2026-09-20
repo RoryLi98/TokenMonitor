@@ -46,6 +46,7 @@ public partial class TaskbarBarWindow : Window
     public event EventHandler? OpenRequested;
     public event EventHandler? RefreshRequested;
     public event EventHandler? SettingsRequested;
+    public event EventHandler? LockRequested;
     public event EventHandler? HideRequested;
     public event EventHandler? ExitRequested;
 
@@ -54,7 +55,8 @@ public partial class TaskbarBarWindow : Window
         var result = _placementService.Place(
             this,
             _settings.TaskbarPositionRatio,
-            verticalOffsetDip: _settings.TaskbarWindowOffsetTop);
+            verticalOffsetDip: _settings.TaskbarWindowOffsetTop,
+            preferredMonitorDeviceName: _settings.TaskbarMonitorDeviceName);
         var hostText = result.IsEmbedded ? "已嵌入任务栏" : "任务栏覆盖层";
         var collisionText = result.TrafficMonitorDetected
             ? result.AvoidedCollision ? " · 已避让 TrafficMonitor" : " · 需要手动调整位置"
@@ -204,6 +206,7 @@ public partial class TaskbarBarWindow : Window
         Height = 32;
         TwoLineTextRoot.Measure(new System.Windows.Size(double.PositiveInfinity, 32));
         Width = Math.Max(1, Math.Ceiling(TwoLineTextRoot.DesiredSize.Width));
+        ApplyInteractionSettings();
 
         if (IsLoaded)
         {
@@ -232,6 +235,12 @@ public partial class TaskbarBarWindow : Window
             return;
         }
 
+        if (_settings.TaskbarLocked)
+        {
+            OpenRequested?.Invoke(this, EventArgs.Empty);
+            return;
+        }
+
         if (_placementService.IsEmbedded(this))
         {
             OpenRequested?.Invoke(this, EventArgs.Empty);
@@ -240,6 +249,7 @@ public partial class TaskbarBarWindow : Window
 
         var startLeft = Left;
         var startTop = Top;
+        _placementTimer.Stop();
         try
         {
             DragMove();
@@ -247,6 +257,13 @@ public partial class TaskbarBarWindow : Window
         catch (InvalidOperationException)
         {
             return;
+        }
+        finally
+        {
+            if (IsLoaded)
+            {
+                _placementTimer.Start();
+            }
         }
 
         var moved = Math.Abs(Left - startLeft) >= SystemParameters.MinimumHorizontalDragDistance
@@ -263,7 +280,16 @@ public partial class TaskbarBarWindow : Window
             desiredLeftDip: Left,
             verticalOffsetDip: _settings.TaskbarWindowOffsetTop);
         _settings.TaskbarPositionRatio = result.PositionRatio;
+        _settings.TaskbarMonitorDeviceName = result.MonitorDeviceName;
         _settingsStore.Save(_settings);
+    }
+
+    public void ApplyInteractionSettings()
+    {
+        RootGrid.Cursor = _settings.TaskbarLocked
+            ? System.Windows.Input.Cursors.Arrow
+            : System.Windows.Input.Cursors.SizeAll;
+        ContextMenu = _settings.TaskbarLocked ? null : TaskbarContextMenu;
     }
 
     private void OpenMenuItem_Click(object sender, RoutedEventArgs e) =>
@@ -278,9 +304,13 @@ public partial class TaskbarBarWindow : Window
     private void AutoPlaceMenuItem_Click(object sender, RoutedEventArgs e)
     {
         _settings.TaskbarPositionRatio = null;
+        _settings.TaskbarMonitorDeviceName = null;
         _settingsStore.Save(_settings);
         EnsurePlacement();
     }
+
+    private void LockMenuItem_Click(object sender, RoutedEventArgs e) =>
+        LockRequested?.Invoke(this, EventArgs.Empty);
 
     private void HideMenuItem_Click(object sender, RoutedEventArgs e) =>
         HideRequested?.Invoke(this, EventArgs.Empty);
