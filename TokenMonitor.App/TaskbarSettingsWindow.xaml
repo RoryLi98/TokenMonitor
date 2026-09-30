@@ -89,8 +89,15 @@
 
             <TabItem Header="布局">
                 <StackPanel Margin="12">
-                    <CheckBox x:Name="LockTaskbarCheckBox"
+                    <CheckBox x:Name="StartWithWindowsCheckBox"
                               Margin="2,2,0,8"
+                              Content="登录 Windows 后自动启动 TokenMonitor" />
+                    <TextBlock Margin="2,0,0,12"
+                               Foreground="#667085"
+                               TextWrapping="Wrap"
+                               Text="开机启动时只显示任务栏文本条和托盘图标，不自动弹出详情窗口。" />
+                    <CheckBox x:Name="LockTaskbarCheckBox"
+                              Margin="2,0,0,8"
                               Content="固定任务栏文本条位置" />
                     <TextBlock Margin="2,0,0,10"
                                Foreground="#667085"
@@ -126,6 +133,46 @@
                                        Text="双行窗口固定为 32 px、每行 16 px；垂直间距会让第一行上移、第二行下移。" />
                         </Grid>
                     </GroupBox>
+                </StackPanel>
+            </TabItem>
+
+            <TabItem Header="详情弹窗">
+                <StackPanel Margin="12">
+                    <GroupBox Header="弹窗布局" Padding="10,8">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="118" />
+                                <ColumnDefinition Width="58" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="28" />
+                                <RowDefinition Height="28" />
+                                <RowDefinition Height="28" />
+                                <RowDefinition Height="28" />
+                                <RowDefinition Height="28" />
+                            </Grid.RowDefinitions>
+                            <TextBlock VerticalAlignment="Center" Text="弹窗宽度" />
+                            <TextBox x:Name="PopupWidthTextBox" Grid.Column="1" VerticalContentAlignment="Center" />
+                            <TextBlock Grid.Column="2" Margin="8,0,0,0" VerticalAlignment="Center" Foreground="#667085" Text="280–500 px" />
+                            <TextBlock Grid.Row="1" VerticalAlignment="Center" Text="上/左右内边距" />
+                            <TextBox x:Name="PopupPaddingTextBox" Grid.Row="1" Grid.Column="1" VerticalContentAlignment="Center" />
+                            <TextBlock Grid.Row="1" Grid.Column="2" Margin="8,0,0,0" VerticalAlignment="Center" Foreground="#667085" Text="0–24 px" />
+                            <TextBlock Grid.Row="2" VerticalAlignment="Center" Text="底部内边距" />
+                            <TextBox x:Name="PopupBottomPaddingTextBox" Grid.Row="2" Grid.Column="1" VerticalContentAlignment="Center" />
+                            <TextBlock Grid.Row="2" Grid.Column="2" Margin="8,0,0,0" VerticalAlignment="Center" Foreground="#667085" Text="0–24 px" />
+                            <TextBlock Grid.Row="3" VerticalAlignment="Center" Text="弹窗圆角" />
+                            <TextBox x:Name="PopupCornerRadiusTextBox" Grid.Row="3" Grid.Column="1" VerticalContentAlignment="Center" />
+                            <TextBlock Grid.Row="3" Grid.Column="2" Margin="8,0,0,0" VerticalAlignment="Center" Foreground="#667085" Text="0–20 px" />
+                            <TextBlock Grid.Row="4" VerticalAlignment="Center" Text="标题栏缩放" />
+                            <TextBox x:Name="PopupHeaderScaleTextBox" Grid.Row="4" Grid.Column="1" VerticalContentAlignment="Center" />
+                            <TextBlock Grid.Row="4" Grid.Column="2" Margin="8,0,0,0" VerticalAlignment="Center" Foreground="#667085" Text="70–150%" />
+                        </Grid>
+                    </GroupBox>
+                    <TextBlock Margin="2,10,0,0"
+                               Foreground="#667085"
+                               TextWrapping="Wrap"
+                               Text="标题栏缩放会一起调整图标、标题和按钮；放大后若标题显示不全，可调大弹窗宽度。弹窗高度会随内容自动收缩。" />
                 </StackPanel>
             </TabItem>
         </TabControl>

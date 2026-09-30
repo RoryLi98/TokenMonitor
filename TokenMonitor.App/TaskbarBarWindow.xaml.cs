@@ -235,15 +235,20 @@ public partial class TaskbarBarWindow : Window
             return;
         }
 
-        if (_settings.TaskbarLocked)
+        if (e.ClickCount >= 2)
         {
             OpenRequested?.Invoke(this, EventArgs.Empty);
+            e.Handled = true;
+            return;
+        }
+
+        if (_settings.TaskbarLocked)
+        {
             return;
         }
 
         if (_placementService.IsEmbedded(this))
         {
-            OpenRequested?.Invoke(this, EventArgs.Empty);
             return;
         }
 
@@ -270,7 +275,6 @@ public partial class TaskbarBarWindow : Window
             || Math.Abs(Top - startTop) >= SystemParameters.MinimumVerticalDragDistance;
         if (!moved)
         {
-            OpenRequested?.Invoke(this, EventArgs.Empty);
             return;
         }
 

@@ -17,6 +17,7 @@ public partial class TaskbarSettingsWindow : Window
 
     private void LoadValues()
     {
+        StartWithWindowsCheckBox.IsChecked = _settings.StartWithWindows;
         CodexLabelTextBox.Text = _settings.TaskbarCodexLabel;
         ClaudeLabelTextBox.Text = _settings.TaskbarClaudeLabel;
         CodexCountdownPrefixTextBox.Text = _settings.TaskbarCodexCountdownPrefix;
@@ -36,11 +37,17 @@ public partial class TaskbarSettingsWindow : Window
         VerticalMarginTextBox.Text = _settings.TaskbarVerticalMargin.ToString();
         WindowOffsetTopTextBox.Text = _settings.TaskbarWindowOffsetTop.ToString();
         LockTaskbarCheckBox.IsChecked = _settings.TaskbarLocked;
+        PopupWidthTextBox.Text = _settings.PopupWidth.ToString();
+        PopupPaddingTextBox.Text = _settings.PopupPadding.ToString();
+        PopupBottomPaddingTextBox.Text = _settings.PopupBottomPadding.ToString();
+        PopupCornerRadiusTextBox.Text = _settings.PopupCornerRadius.ToString();
+        PopupHeaderScaleTextBox.Text = _settings.PopupHeaderScalePercent.ToString();
     }
 
     private void RestoreDefaultsButton_Click(object sender, RoutedEventArgs e)
     {
         var defaults = new AppSettings();
+        StartWithWindowsCheckBox.IsChecked = defaults.StartWithWindows;
         CodexLabelTextBox.Text = defaults.TaskbarCodexLabel;
         ClaudeLabelTextBox.Text = defaults.TaskbarClaudeLabel;
         CodexCountdownPrefixTextBox.Text = defaults.TaskbarCodexCountdownPrefix;
@@ -58,6 +65,11 @@ public partial class TaskbarSettingsWindow : Window
         VerticalMarginTextBox.Text = defaults.TaskbarVerticalMargin.ToString();
         WindowOffsetTopTextBox.Text = defaults.TaskbarWindowOffsetTop.ToString();
         LockTaskbarCheckBox.IsChecked = defaults.TaskbarLocked;
+        PopupWidthTextBox.Text = defaults.PopupWidth.ToString();
+        PopupPaddingTextBox.Text = defaults.PopupPadding.ToString();
+        PopupBottomPaddingTextBox.Text = defaults.PopupBottomPadding.ToString();
+        PopupCornerRadiusTextBox.Text = defaults.PopupCornerRadius.ToString();
+        PopupHeaderScaleTextBox.Text = defaults.PopupHeaderScalePercent.ToString();
         _restoreDefaultsRequested = true;
     }
 
@@ -66,7 +78,12 @@ public partial class TaskbarSettingsWindow : Window
         if (!TryReadNumber(FontSizeTextBox.Text, 5, 72, "字号", out var fontSize)
             || !TryReadNumber(ItemSpacingTextBox.Text, 0, 32, "项目间距", out var itemSpacing)
             || !TryReadNumber(VerticalMarginTextBox.Text, -10, 10, "垂直间距", out var verticalMargin)
-            || !TryReadNumber(WindowOffsetTopTextBox.Text, -20, 20, "窗口顶部偏移", out var offsetTop))
+            || !TryReadNumber(WindowOffsetTopTextBox.Text, -20, 20, "窗口顶部偏移", out var offsetTop)
+            || !TryReadNumber(PopupWidthTextBox.Text, 280, 500, "弹窗宽度", out var popupWidth)
+            || !TryReadNumber(PopupPaddingTextBox.Text, 0, 24, "上/左右内边距", out var popupPadding)
+            || !TryReadNumber(PopupBottomPaddingTextBox.Text, 0, 24, "底部内边距", out var popupBottomPadding)
+            || !TryReadNumber(PopupCornerRadiusTextBox.Text, 0, 20, "弹窗圆角", out var popupCornerRadius)
+            || !TryReadNumber(PopupHeaderScaleTextBox.Text, 70, 150, "标题栏缩放", out var popupHeaderScale))
         {
             return;
         }
@@ -83,6 +100,7 @@ public partial class TaskbarSettingsWindow : Window
         }
 
         _settings.TaskbarCodexLabel = codexLabel;
+        _settings.StartWithWindows = StartWithWindowsCheckBox.IsChecked == true;
         _settings.TaskbarClaudeLabel = claudeLabel;
         _settings.TaskbarCodexCountdownPrefix = CodexCountdownPrefixTextBox.Text ?? string.Empty;
         _settings.TaskbarClaudeCountdownPrefix = ClaudeCountdownPrefixTextBox.Text ?? string.Empty;
@@ -103,6 +121,11 @@ public partial class TaskbarSettingsWindow : Window
         _settings.TaskbarVerticalMargin = verticalMargin;
         _settings.TaskbarWindowOffsetTop = offsetTop;
         _settings.TaskbarLocked = LockTaskbarCheckBox.IsChecked == true;
+        _settings.PopupWidth = popupWidth;
+        _settings.PopupPadding = popupPadding;
+        _settings.PopupBottomPadding = popupBottomPadding;
+        _settings.PopupCornerRadius = popupCornerRadius;
+        _settings.PopupHeaderScalePercent = popupHeaderScale;
         if (_restoreDefaultsRequested)
         {
             var defaults = new AppSettings();

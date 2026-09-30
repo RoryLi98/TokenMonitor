@@ -5,6 +5,7 @@ namespace TokenMonitor.App.Infrastructure;
 
 internal sealed class AppSettings
 {
+    public bool StartWithWindows { get; set; }
     public bool ShowTaskbarBar { get; set; } = true;
     public double? TaskbarPositionRatio { get; set; } = 0.8354285714285714;
     public string? TaskbarMonitorDeviceName { get; set; } = @"\\.\DISPLAY1";
@@ -30,6 +31,11 @@ internal sealed class AppSettings
     public int TaskbarItemSpacing { get; set; } = 3;
     public int TaskbarVerticalMargin { get; set; }
     public int TaskbarWindowOffsetTop { get; set; }
+    public int PopupWidth { get; set; } = 280;
+    public int PopupPadding { get; set; } = 7;
+    public int PopupBottomPadding { get; set; } = 2;
+    public int PopupCornerRadius { get; set; }
+    public int PopupHeaderScalePercent { get; set; } = 100;
 }
 
 internal sealed class AppSettingsStore
@@ -98,6 +104,11 @@ internal sealed class AppSettingsStore
             settings.TaskbarItemSpacing = Math.Clamp(settings.TaskbarItemSpacing, 0, 32);
             settings.TaskbarVerticalMargin = Math.Clamp(settings.TaskbarVerticalMargin, -10, 10);
             settings.TaskbarWindowOffsetTop = Math.Clamp(settings.TaskbarWindowOffsetTop, -20, 20);
+            settings.PopupWidth = Math.Clamp(settings.PopupWidth, 280, 500);
+            settings.PopupPadding = Math.Clamp(settings.PopupPadding, 0, 24);
+            settings.PopupBottomPadding = Math.Clamp(settings.PopupBottomPadding, 0, 24);
+            settings.PopupCornerRadius = Math.Clamp(settings.PopupCornerRadius, 0, 20);
+            settings.PopupHeaderScalePercent = Math.Clamp(settings.PopupHeaderScalePercent, 70, 150);
 
             return settings;
         }

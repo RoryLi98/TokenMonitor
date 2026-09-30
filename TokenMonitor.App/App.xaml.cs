@@ -79,12 +79,18 @@ public partial class App : System.Windows.Application
 
         _settingsStore = new AppSettingsStore();
         _settings = _settingsStore.Load();
+        _ = StartupRegistrationService.TrySetEnabled(_settings.StartWithWindows, out _);
 
-        _window = new MainWindow(_viewModel);
+        _window = new MainWindow(_viewModel, _settings);
         _window.SetRefreshInterval(TimeSpan.FromSeconds(_settings.RefreshIntervalSeconds));
         _window.TaskbarRecreated += OnTaskbarRecreated;
 
-        _window.ShowPopup();
+        var startedWithWindows = e.Args.Any(
+            argument => string.Equals(argument, "--startup", StringComparison.OrdinalIgnoreCase));
+        if (!startedWithWindows)
+        {
+            _window.ShowPopup();
+        }
         if (_settings.ShowTaskbarBar)
         {
             CreateTaskbarWindow();
@@ -290,6 +296,7 @@ public partial class App : System.Windows.Application
             return;
         }
 
+        var previousStartWithWindows = _settings.StartWithWindows;
         var dialog = new TaskbarSettingsWindow(_settings);
         if (_window?.IsVisible == true)
         {
@@ -302,8 +309,20 @@ public partial class App : System.Windows.Application
             return;
         }
 
+        if (!StartupRegistrationService.TrySetEnabled(_settings.StartWithWindows, out var startupError))
+        {
+            _settings.StartWithWindows = previousStartWithWindows;
+            System.Windows.MessageBox.Show(
+                _window,
+                $"无法修改开机启动设置：{startupError}",
+                "TokenMonitor",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+        }
+
         _settingsStore.Save(_settings);
         _taskbarWindow?.ApplyTaskbarTextSettings();
+        _window?.ApplyPopupSettings(_settings);
         UpdateTaskbarLockMenuState();
     }
 
@@ -372,6 +391,7 @@ public partial class App : System.Windows.Application
 
         _settings = _settingsStore.Load();
         _window?.SetRefreshInterval(TimeSpan.FromSeconds(_settings.RefreshIntervalSeconds));
+        _window?.ApplyPopupSettings(_settings);
         foreach (var pair in _refreshIntervalMenuItems)
         {
             pair.Value.Checked = pair.Key == _settings.RefreshIntervalSeconds;

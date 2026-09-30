@@ -56,7 +56,7 @@ public sealed class MainViewModel : ObservableObject, IAsyncDisposable
     }
 
     public string TaskbarTooltip =>
-        $"Codex {Codex.PercentText} · {Codex.TaskbarCountdownText} 后刷新 · 周 {Codex.TaskbarSecondaryPercentText} / {Codex.TaskbarSecondaryCountdownText}\n" +
+        $"双击打开详情\nCodex {Codex.PercentText} · {Codex.TaskbarCountdownText} 后刷新 · 周 {Codex.TaskbarSecondaryPercentText} / {Codex.TaskbarSecondaryCountdownText}\n" +
         $"Claude {Claude.PercentText} · {Claude.TaskbarCountdownText} 后刷新";
 
     public async Task RefreshAsync()

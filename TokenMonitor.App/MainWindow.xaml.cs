@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Threading;
+using TokenMonitor.App.Infrastructure;
 using TokenMonitor.App.ViewModels;
 
 namespace TokenMonitor.App;
@@ -18,7 +19,7 @@ public partial class MainWindow : Window
     private HwndSource? _windowSource;
     private static readonly int TaskbarCreatedMessage = (int)RegisterWindowMessage("TaskbarCreated");
 
-    public MainWindow(MainViewModel viewModel)
+    internal MainWindow(MainViewModel viewModel, AppSettings settings)
     {
         InitializeComponent();
 #if DEBUG
@@ -26,6 +27,7 @@ public partial class MainWindow : Window
 #endif
         _viewModel = viewModel;
         DataContext = viewModel;
+        ApplyPopupSettings(settings);
 
         _clockTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
         _clockTimer.Tick += (_, _) => _viewModel.UpdateClock();
@@ -34,6 +36,13 @@ public partial class MainWindow : Window
         _refreshTimer.Tick += async (_, _) => await _viewModel.RefreshAsync();
 
         Loaded += OnLoaded;
+        SizeChanged += (_, _) =>
+        {
+            if (IsVisible)
+            {
+                PositionNearTaskbar();
+            }
+        };
         Closing += OnClosing;
         SourceInitialized += OnSourceInitialized;
     }
@@ -42,8 +51,9 @@ public partial class MainWindow : Window
 
     public void ShowPopup()
     {
-        PositionNearTaskbar();
         Show();
+        UpdateLayout();
+        PositionNearTaskbar();
         Activate();
     }
 
@@ -52,6 +62,35 @@ public partial class MainWindow : Window
     public void SetRefreshInterval(TimeSpan interval)
     {
         _refreshTimer.Interval = interval;
+    }
+
+    internal void ApplyPopupSettings(AppSettings settings)
+    {
+        Width = settings.PopupWidth;
+        PopupBorder.Padding = new Thickness(
+            settings.PopupPadding,
+            settings.PopupPadding,
+            settings.PopupPadding,
+            settings.PopupBottomPadding);
+        PopupBorder.CornerRadius = new CornerRadius(settings.PopupCornerRadius);
+        var headerScale = settings.PopupHeaderScalePercent / 100.0;
+        HeaderLogo.Width = 22 * headerScale;
+        HeaderLogo.Height = 22 * headerScale;
+        HeaderLogo.Margin = new Thickness(0, 0, 7 * headerScale, 0);
+        HeaderTitle.FontSize = 17 * headerScale;
+        foreach (var button in new[] { RefreshButton, HideButton })
+        {
+            button.Width = 28 * headerScale;
+            button.Height = 28 * headerScale;
+            button.Margin = new Thickness(4 * headerScale, 0, 0, 0);
+            button.FontSize = 15 * headerScale;
+        }
+        PopupHeader.Margin = new Thickness(1, 0, 1, 6 * headerScale);
+        if (IsVisible)
+        {
+            UpdateLayout();
+            PositionNearTaskbar();
+        }
     }
 
     private async void OnLoaded(object sender, RoutedEventArgs e)
@@ -72,8 +111,10 @@ public partial class MainWindow : Window
     private void PositionNearTaskbar()
     {
         var workArea = SystemParameters.WorkArea;
-        Left = Math.Max(workArea.Left + 12, workArea.Right - Width - 14);
-        Top = Math.Max(workArea.Top + 12, workArea.Bottom - Height - 14);
+        var width = ActualWidth > 0 ? ActualWidth : Width;
+        var height = ActualHeight > 0 ? ActualHeight : 160;
+        Left = Math.Max(workArea.Left + 12, workArea.Right - width - 14);
+        Top = Math.Max(workArea.Top + 12, workArea.Bottom - height - 14);
     }
 
     private void OnClosing(object? sender, CancelEventArgs e)

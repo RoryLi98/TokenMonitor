@@ -5,8 +5,8 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
         Title="TokenMonitor"
-        Width="360"
-        Height="192"
+        Width="280"
+        SizeToContent="Height"
         WindowStyle="None"
         AllowsTransparency="True"
         Background="Transparent"
@@ -69,90 +69,100 @@
         </Style>
     </Window.Resources>
 
-    <Border Background="#FA14171C"
+    <Border x:Name="PopupBorder"
+            Background="#FF14171C"
             BorderBrush="#353B46"
             BorderThickness="1"
-            CornerRadius="14"
-            Padding="12"
+            CornerRadius="0"
+            Padding="7,7,7,2"
             MouseLeftButtonDown="Root_MouseLeftButtonDown">
-        <Border.Effect>
-            <DropShadowEffect BlurRadius="18" ShadowDepth="4" Opacity="0.38" Color="#000000" />
-        </Border.Effect>
-
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
-            <Grid Grid.Row="0" Margin="2,0,2,9">
+            <Grid x:Name="PopupHeader" Grid.Row="0" Margin="1,0,1,6">
                 <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <Image Width="22"
-                           Height="22"
-                           Margin="0,0,7,0"
-                           Source="/TokenMonitor;component/Assets/logo.png" />
-                    <TextBlock Text="TokenMonitor"
-                               Foreground="#F4F6FA"
-                               FontSize="17"
-                               FontWeight="SemiBold" />
-                    <TextBlock Text="{Binding LastUpdatedText}"
-                               Margin="10,6,0,0"
-                               Foreground="#8992A3"
-                               FontSize="10" />
-                </StackPanel>
-                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                    <Button Style="{StaticResource IconButton}"
+                <Image x:Name="HeaderLogo"
+                       Width="22"
+                       Height="22"
+                       Margin="0,0,7,0"
+                       VerticalAlignment="Center"
+                       Source="/TokenMonitor;component/Assets/logo.png" />
+                <TextBlock x:Name="HeaderTitle"
+                           Grid.Column="1"
+                           VerticalAlignment="Center"
+                           Text="TokenMonitor"
+                           TextTrimming="CharacterEllipsis"
+                           Foreground="#F4F6FA"
+                           FontSize="17"
+                           FontWeight="SemiBold" />
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button x:Name="RefreshButton"
+                            Style="{StaticResource IconButton}"
                             Command="{Binding RefreshCommand}"
                             Content="↻"
                             ToolTip="立即刷新" />
-                    <Button Style="{StaticResource IconButton}"
+                    <Button x:Name="HideButton"
+                            Style="{StaticResource IconButton}"
                             Click="CloseButton_Click"
                             Content="×"
                             ToolTip="隐藏到系统托盘" />
                 </StackPanel>
             </Grid>
 
-            <ItemsControl Grid.Row="1" ItemsSource="{Binding Providers}">
+            <ItemsControl Grid.Row="1" ItemsSource="{Binding Providers}" AlternationCount="2">
+                <ItemsControl.ItemContainerStyle>
+                    <Style TargetType="ContentPresenter">
+                        <Setter Property="Margin" Value="0" />
+                        <Style.Triggers>
+                            <Trigger Property="ItemsControl.AlternationIndex" Value="0">
+                                <Setter Property="Margin" Value="0,0,0,5" />
+                            </Trigger>
+                        </Style.Triggers>
+                    </Style>
+                </ItemsControl.ItemContainerStyle>
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
-                        <Border Margin="0,0,0,7"
-                                Padding="10,8"
+                        <Border Padding="8,6"
                                 Background="#20242B"
                                 BorderBrush="#303640"
                                 BorderThickness="1"
                                 CornerRadius="10">
                             <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="4" />
-                                    <ColumnDefinition Width="9" />
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <Border Grid.Column="0"
-                                        Background="{Binding Accent}"
-                                        CornerRadius="2" />
-
-                                <Grid Grid.Column="2">
                                     <Grid.RowDefinitions>
                                         <RowDefinition Height="Auto" />
                                         <RowDefinition Height="Auto" />
                                         <RowDefinition Height="Auto" />
                                     </Grid.RowDefinitions>
-                                    <StackPanel Grid.Row="0" Orientation="Horizontal">
+                                    <Grid Grid.Row="0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
                                         <TextBlock Text="{Binding DisplayName}"
                                                    Foreground="#F2F4F8"
                                                    FontSize="13"
                                                    FontWeight="SemiBold" />
-                                        <TextBlock Text="{Binding ResetText}"
+                                        <TextBlock Grid.Column="1"
+                                                   Text="{Binding ResetText}"
                                                    Margin="9,1,0,0"
                                                    Foreground="#A4ACBA"
                                                    FontSize="10"
                                                    TextTrimming="CharacterEllipsis" />
-                                    </StackPanel>
+                                        <TextBlock Grid.Column="2"
+                                                   Margin="8,-2,0,0"
+                                                   Text="{Binding PercentText}"
+                                                   Foreground="#FFFFFF"
+                                                   FontSize="20"
+                                                   FontWeight="Bold" />
+                                    </Grid>
 
                                     <ProgressBar Grid.Row="1"
                                                  Margin="0,6,0,5"
@@ -167,33 +177,28 @@
                                             <ColumnDefinition Width="*" />
                                             <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
-                                        <StackPanel Orientation="Horizontal">
+                                        <Grid ClipToBounds="True">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
                                             <Ellipse Width="6"
                                                      Height="6"
                                                      Margin="0,0,5,0"
                                                      VerticalAlignment="Center"
                                                      Fill="{Binding StatusColor}" />
-                                            <TextBlock MaxWidth="196"
+                                            <TextBlock Grid.Column="1"
                                                        Text="{Binding StatusText}"
                                                        Foreground="#8E98A9"
                                                        FontSize="9.5"
                                                        TextTrimming="CharacterEllipsis" />
-                                        </StackPanel>
+                                        </Grid>
                                         <TextBlock Grid.Column="1"
                                                    Text="{Binding SecondaryText}"
                                                    Foreground="#8E98A9"
                                                    FontSize="9.5"
                                                    Visibility="{Binding HasSecondary, Converter={StaticResource BooleanToVisibilityConverter}}" />
                                     </Grid>
-                                </Grid>
-
-                                <TextBlock Grid.Column="3"
-                                           Margin="10,-2,0,0"
-                                           VerticalAlignment="Top"
-                                           Text="{Binding PercentText}"
-                                           Foreground="#FFFFFF"
-                                           FontSize="20"
-                                           FontWeight="Bold" />
                             </Grid>
                         </Border>
                     </DataTemplate>
